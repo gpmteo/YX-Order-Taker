@@ -45,7 +45,7 @@ header{background:var(--teal-dark);padding:0 18px;height:58px;display:flex;align
 main{flex:1;max-width:560px;width:100%;margin:0 auto;padding:14px 13px 100px;display:flex;flex-direction:column;gap:14px;}
 
 /* CARD */
-.card{background:var(--white);border-radius:var(--r-lg);box-shadow:var(--sh-md);overflow:hidden;}
+.card{background:var(--white);border-radius:var(--r-lg);box-shadow:var(--sh-md);}
 .card-header{padding:12px 17px 10px;border-bottom:1.5px solid var(--teal-light);display:flex;align-items:center;gap:10px;}
 .card-icon{width:28px;height:28px;background:var(--teal-light);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
 .card-header h2{font-size:13px;font-weight:700;color:var(--teal-dark);}
@@ -433,7 +433,7 @@ main{flex:1;max-width:560px;width:100%;margin:0 auto;padding:14px 13px 100px;dis
         <div class="order-count empty" id="prod-count">0</div>
       </div>
       <div style="display:flex;gap:6px;">
-        <button class="btn btn-outline btn-sm" onclick="exportProductsCSV()">📊 Export CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="exportProductsCSV()">📊 Export Excel</button>
         <button class="btn btn-danger btn-sm" onclick="confirmClearProducts()" id="clear-prod-btn">🗑 Clear all</button>
       </div>
     </div>
@@ -512,9 +512,9 @@ main{flex:1;max-width:560px;width:100%;margin:0 auto;padding:14px 13px 100px;dis
         <div class="export-icon wa">💬</div>
         <div class="export-text"><strong>Send via WhatsApp</strong><span>Opens WhatsApp with order summary</span></div>
       </button>
-      <button class="export-option" onclick="exportCSV()">
+      <button class="export-option" onclick="exportXLSX()">
         <div class="export-icon csv">📊</div>
-        <div class="export-text"><strong>Download as CSV</strong><span>Open in Excel or Google Sheets</span></div>
+        <div class="export-text"><strong>Download as Excel</strong><span>Opens directly in Excel</span></div>
       </button>
       <button class="export-option" onclick="exportText()">
         <div class="export-icon txt">📄</div>
@@ -902,32 +902,52 @@ function clearForm() {
 }
 function removeItem(idx) { orders.splice(idx,1); renderList(); showToast('Item removed'); }
 function renderList() {
-  const list=document.getElementById('order-list'), empty=document.getElementById('order-empty');
-  const footer=document.getElementById('order-footer'), cnt=document.getElementById('order-count');
-  const cb=document.getElementById('clear-all-btn');
-  cnt.textContent=orders.length; cnt.classList.toggle('empty',!orders.length);
-  cb.style.display=orders.length?'inline-flex':'none';
-  footer.style.display=orders.length?'block':'none';
-  if (!orders.length) { list.innerHTML=''; list.appendChild(empty); empty.style.display='flex'; return; }
-  empty.style.display='none'; list.innerHTML='';
-  let tq=0;
-  orders.forEach((item,i)=>{
-    tq+=item.qty;
-    const el=document.createElement('div'); el.className='order-item';
-    el.innerHTML=`
-      <div class="item-num">${i+1}</div>
+  const list   = document.getElementById('order-list');
+  const empty  = document.getElementById('order-empty');
+  const footer = document.getElementById('order-footer');
+  const cnt    = document.getElementById('order-count');
+  const cb     = document.getElementById('clear-all-btn');
+
+  cnt.textContent = orders.length;
+  cnt.classList.toggle('empty', !orders.length);
+  cb.style.display = orders.length ? 'inline-flex' : 'none';
+  footer.style.display = orders.length ? 'block' : 'none';
+
+  // Clear only order-item rows, leave empty placeholder detached
+  Array.from(list.querySelectorAll('.order-item')).forEach(el => el.remove());
+
+  if (!orders.length) {
+    if (!list.contains(empty)) list.appendChild(empty);
+    empty.style.display = 'flex';
+    document.getElementById('session-badge').style.display = 'none';
+    return;
+  }
+
+  // Hide empty placeholder
+  empty.style.display = 'none';
+  if (list.contains(empty)) list.removeChild(empty);
+
+  let tq = 0;
+  orders.forEach((item, i) => {
+    tq += item.qty;
+    const el = document.createElement('div');
+    el.className = 'order-item';
+    el.innerHTML = `
+      <div class="item-num">${i + 1}</div>
       <div class="item-details">
-        <div class="item-name">${item.name?escH(item.name):'<span style="color:var(--ink-soft);font-style:italic;font-size:12px;">Unknown item</span>'}</div>
-        <div class="item-sub">${escH(item.code)}${item.note?' · 📝 '+escH(item.note):''}</div>
+        <div class="item-name">${item.name ? escH(item.name) : '<span style="color:var(--ink-soft);font-style:italic;font-size:12px;">Unknown item</span>'}</div>
+        <div class="item-sub">${escH(item.code)}${item.note ? ' · 📝 ' + escH(item.note) : ''}</div>
       </div>
       <div class="item-qty">${item.qty} pcs</div>
       <button class="btn btn-danger" onclick="removeItem(${i})" style="padding:4px 6px;">✕</button>`;
     list.appendChild(el);
   });
-  document.getElementById('total-qty').textContent=tq;
-  document.getElementById('total-lines').textContent=orders.length;
-  const sb=document.getElementById('session-badge');
-  if(orders.length){sb.style.display='';sb.textContent=`${orders.length} item${orders.length>1?'s':''}`;} else {sb.style.display='none';}
+
+  document.getElementById('total-qty').textContent = tq;
+  document.getElementById('total-lines').textContent = orders.length;
+  const sb = document.getElementById('session-badge');
+  sb.style.display = '';
+  sb.textContent = `${orders.length} item${orders.length > 1 ? 's' : ''}`;
 }
 
 // ── PRODUCTS ──
@@ -1012,11 +1032,15 @@ function clearAllProducts(){
   showToast('Catalogue cleared');
 }
 function exportProductsCSV() {
-  if (!products.length){showToast('No products');return;}
-  let csv='Item Code,Product Name,Category\n';
-  products.forEach(p=>{csv+=`"${p.code}","${p.name}","${p.category||''}"\n`;});
-  dl(new Blob([csv],{type:'text/csv'}),'YX-Products.csv');
-  showToast('📊 Exported');
+  if (!products.length) { showToast('No products to export'); return; }
+  const wsData = [['Item Code', 'Product Name', 'Category']];
+  products.forEach(p => wsData.push([p.code, p.name, p.category || '']));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = [{wch:18},{wch:30},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Products');
+  XLSX.writeFile(wb, 'YX-Products.xlsx');
+  showToast('📊 Products exported');
 }
 
 // ── CSV IMPORT ──
@@ -1112,13 +1136,47 @@ function buildText() {
   return L.join('\n');
 }
 function exportWhatsApp(){window.open('https://wa.me/?text='+encodeURIComponent(buildText()),'_blank');closeExport();}
-function exportCSV(){
-  const client=document.getElementById('client-name').value.trim();
-  const now=new Date().toLocaleString('en-MY');
-  let csv='No.,Item Code,Product Name,Remark,Quantity,Client,Date\n';
-  orders.forEach((item,i)=>{csv+=`${i+1},"${item.code}","${item.name}","${item.note}",${item.qty},"${client}","${now}"\n`;});
-  dl(new Blob([csv],{type:'text/csv'}),`YX-Order-${new Date().toISOString().slice(0,10)}.csv`);
-  closeExport(); showToast('📊 Downloaded');
+function exportXLSX() {
+  const client = document.getElementById('client-name').value.trim();
+  const now    = new Date().toLocaleString('en-MY', {timeZone:'Asia/Kuala_Lumpur'});
+  const date   = new Date().toISOString().slice(0,10);
+
+  // Build data rows
+  const wsData = [
+    ['YX Precious Metal — Order Summary'],
+    [''],
+    ['Client', client || '—'],
+    ['Date',   now],
+    [''],
+    ['No.', 'Item Code', 'Product Name', 'Remark', 'Quantity'],
+  ];
+  orders.forEach((item, i) => {
+    wsData.push([i + 1, item.code, item.name || '', item.note || '', item.qty]);
+  });
+  const totalQty = orders.reduce((s, o) => s + o.qty, 0);
+  wsData.push(['']);
+  wsData.push(['', '', '', 'Total qty', totalQty]);
+  wsData.push(['', '', '', 'Line items', orders.length]);
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Column widths
+  ws['!cols'] = [
+    {wch:6},   // No.
+    {wch:18},  // Item Code
+    {wch:28},  // Product Name
+    {wch:20},  // Remark
+    {wch:10},  // Quantity
+  ];
+
+  // Merge title row A1 across 5 columns
+  ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:4} }];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Order');
+  XLSX.writeFile(wb, `YX-Order-${date}.xlsx`);
+  closeExport();
+  showToast('📊 Excel file downloaded');
 }
 function exportText(){
   const t=buildText();
