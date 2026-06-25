@@ -71,22 +71,6 @@ main{flex:1;max-width:560px;width:100%;margin:0 auto;padding:14px 13px 100px;dis
 .scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);animation:scanline 1.8s ease-in-out infinite;}
 @keyframes scanline{0%{top:8%;opacity:1}50%{top:88%;opacity:.7}100%{top:8%;opacity:1}}
 .scan-hint{text-align:center;color:var(--ink-soft);font-size:12px;font-weight:500;padding:4px 0;}
-#qr-reader { border: none !important; }
-#qr-reader video { border-radius: var(--r-md) !important; }
-#qr-reader img { display: none !important; }
-#qr-reader__scan_region { border-radius: var(--r-md); overflow: hidden; }
-#qr-reader__dashboard { padding: 8px 0 0 !important; background: transparent !important; border: none !important; }
-#qr-reader__dashboard_section_csr button { 
-  background: var(--teal) !important; color: white !important; 
-  border: none !important; border-radius: var(--r-sm) !important;
-  padding: 8px 16px !important; font-weight: 600 !important; font-size: 13px !important;
-}
-#qr-reader__status_span { font-size: 12px !important; color: var(--ink-soft) !important; }
-#qr-reader__camera_selection { 
-  width: 100% !important; padding: 8px !important; border-radius: var(--r-sm) !important;
-  border: 1.5px solid var(--border) !important; font-size: 13px !important;
-  background: var(--surface) !important; margin-bottom: 6px !important;
-}
 
 /* PILLS */
 #lookup-pill{display:none;align-items:center;gap:8px;background:var(--gold-light);border:1.5px solid #f0d080;border-radius:var(--r-sm);padding:8px 12px;}
@@ -261,11 +245,33 @@ main{flex:1;max-width:560px;width:100%;margin:0 auto;padding:14px 13px 100px;dis
     <div class="card-body">
       <div class="scan-area">
         <div id="video-container">
-          <div id="qr-reader" style="width:100%;border-radius:var(--r-md);overflow:hidden;"></div>
-          <div id="scan-overlay-custom" style="display:none;position:relative;">
-            <div class="scan-hint" style="position:static;text-align:center;padding:6px 0;font-size:12px;color:var(--ink-soft);">Align barcode within the frame</div>
+          <div style="position:relative;width:100%;border-radius:var(--r-md);overflow:hidden;background:#000;aspect-ratio:16/10;">
+            <video id="preview" playsinline autoplay muted style="width:100%;height:100%;object-fit:cover;display:block;"></video>
+            <canvas id="scan-canvas" style="display:none;"></canvas>
+            <!-- dark overlay with transparent scan slot -->
+            <div style="position:absolute;inset:0;pointer-events:none;">
+              <!-- top shade -->
+              <div style="position:absolute;top:0;left:0;right:0;height:20%;background:rgba(0,0,0,0.45);"></div>
+              <!-- bottom shade -->
+              <div style="position:absolute;bottom:0;left:0;right:0;height:20%;background:rgba(0,0,0,0.45);"></div>
+              <!-- left shade -->
+              <div style="position:absolute;top:20%;bottom:20%;left:0;width:5%;background:rgba(0,0,0,0.45);"></div>
+              <!-- right shade -->
+              <div style="position:absolute;top:20%;bottom:20%;right:0;width:5%;background:rgba(0,0,0,0.45);"></div>
+              <!-- scan frame border -->
+              <div style="position:absolute;top:20%;bottom:20%;left:5%;right:5%;border:2px solid var(--gold);border-radius:4px;">
+                <!-- animated scan line -->
+                <div id="scan-line" style="position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);animation:scanline 1.8s ease-in-out infinite;top:50%;"></div>
+                <!-- corner accents -->
+                <div style="position:absolute;top:-2px;left:-2px;width:18px;height:18px;border-top:3px solid var(--gold);border-left:3px solid var(--gold);border-radius:3px 0 0 0;"></div>
+                <div style="position:absolute;top:-2px;right:-2px;width:18px;height:18px;border-top:3px solid var(--gold);border-right:3px solid var(--gold);border-radius:0 3px 0 0;"></div>
+                <div style="position:absolute;bottom:-2px;left:-2px;width:18px;height:18px;border-bottom:3px solid var(--gold);border-left:3px solid var(--gold);border-radius:0 0 0 3px;"></div>
+                <div style="position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;border-bottom:3px solid var(--gold);border-right:3px solid var(--gold);border-radius:0 0 3px 0;"></div>
+              </div>
+            </div>
+            <div style="position:absolute;bottom:8px;left:0;right:0;text-align:center;color:rgba(255,255,255,0.8);font-size:12px;font-weight:500;pointer-events:none;">Hold barcode steady inside the frame</div>
           </div>
-          <button id="close-scan" onclick="stopScan()" aria-label="Close" style="display:none;width:100%;margin-top:8px;" class="btn btn-outline">✕ Close camera</button>
+          <button id="close-scan" onclick="stopScan()" aria-label="Close camera" style="display:none;width:100%;margin-top:8px;" class="btn btn-outline">✕ Close camera</button>
         </div>
 
         <div class="scan-row">
@@ -561,7 +567,6 @@ main{flex:1;max-width:560px;width:100%;margin:0 auto;padding:14px 13px 100px;dis
 <div id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 // ── CONFIG — update these two values if you change your Google Sheet ──
 const CONFIG = {
@@ -755,62 +760,118 @@ async function startScan() {
   document.getElementById('scan-btn').disabled = true;
 
   try {
-    codeReader = new Html5Qrcode('qr-reader');
-    const cameras = await Html5Qrcode.getCameras();
-    if (!cameras || cameras.length === 0) {
-      throw new Error('No cameras found');
-    }
-    // Prefer back camera
-    const back = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1];
-
-    await codeReader.start(
-      { deviceId: { exact: back.id } },
-      {
-        fps: 10,
-        qrbox: { width: 280, height: 100 },
-        aspectRatio: 1.5,
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.DATA_MATRIX,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-        ],
-      },
-      (decodedText) => {
-        document.getElementById('item-code').value = decodedText;
-        document.getElementById('pill-text').textContent = decodedText;
-        document.getElementById('scan-result-pill').classList.add('visible');
-        onCodeInput();
-        stopScan();
-        document.getElementById('item-qty').focus();
-        showToast('✅ Barcode scanned');
-      },
-      (err) => { /* scan errors are normal while searching, ignore */ }
-    );
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 },
+      }
+    });
+    const video = document.getElementById('preview');
+    video.srcObject = stream;
+    codeReader = stream;
+    await video.play();
+    requestAnimationFrame(scanFrame);
   } catch(e) {
     stopScan();
-    if (e && e.message && e.message.includes('Permission')) {
-      showToast('⚠️ Camera permission denied — please allow in browser settings');
+    if (/permission|denied|notallowed/i.test(String(e))) {
+      showToast('⚠️ Camera permission denied — allow in browser settings');
     } else {
       showToast('⚠️ Camera unavailable — enter code manually');
     }
   }
 }
 
-function stopScan() {
-  if (codeReader) {
-    try {
-      if (codeReader.isScanning) {
-        codeReader.stop().then(()=>{ try{codeReader.clear();}catch(e){} codeReader=null; }).catch(()=>{ codeReader=null; });
-      } else {
-        try{codeReader.clear();}catch(e){} codeReader=null;
+let scanActive = false;
+async function scanFrame() {
+  if (!codeReader) return;
+  const video = document.getElementById('preview');
+  if (video.readyState < video.HAVE_ENOUGH_DATA) { requestAnimationFrame(scanFrame); return; }
+
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) { requestAnimationFrame(scanFrame); return; }
+
+  // Sample the centre 90% wide x 60% tall strip — right region for linear barcodes
+  const sw = Math.floor(vw * 0.90);
+  const sh = Math.floor(vh * 0.60);
+  const sx = Math.floor((vw - sw) / 2);
+  const sy = Math.floor((vh - sh) / 2);
+
+  const canvas = document.getElementById('scan-canvas');
+  canvas.width = sw; canvas.height = sh;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  try {
+    if (window.BarcodeDetector) {
+      // Native BarcodeDetector — fast, hardware-accelerated on Android Chrome
+      if (!scanActive) {
+        scanActive = true;
+        const detector = new BarcodeDetector({
+          formats: ['code_128','code_39','code_93','ean_13','ean_8','upc_a','upc_e','qr_code','data_matrix','itf','codabar']
+        });
+        const barcodes = await detector.detect(canvas);
+        scanActive = false;
+        if (barcodes.length > 0) {
+          onBarcodeFound(barcodes[0].rawValue); return;
+        }
       }
-    } catch(e) { codeReader=null; }
+    } else {
+      // Fallback: ZXing via CDN for Firefox / older browsers
+      if (!window._zxingReader) {
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.21.3/umd/index.min.js');
+        const ZXing = window.ZXing || window.zxing;
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+          ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+          ZXing.BarcodeFormat.EAN_13,   ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.QR_CODE,  ZXing.BarcodeFormat.DATA_MATRIX,
+          ZXing.BarcodeFormat.UPC_A,    ZXing.BarcodeFormat.UPC_E,
+          ZXing.BarcodeFormat.ITF,      ZXing.BarcodeFormat.CODABAR,
+        ]);
+        window._zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+      }
+      try {
+        const imgData = canvas.toDataURL();
+        const result = await window._zxingReader.decodeFromImageUrl(imgData);
+        if (result) { onBarcodeFound(result.getText()); return; }
+      } catch(e) { /* no barcode in this frame, keep scanning */ }
+    }
+  } catch(e) { scanActive = false; }
+
+  if (codeReader) requestAnimationFrame(scanFrame);
+}
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) { res(); return; }
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+function onBarcodeFound(code) {
+  document.getElementById('item-code').value = code;
+  document.getElementById('pill-text').textContent = code;
+  document.getElementById('scan-result-pill').classList.add('visible');
+  onCodeInput();
+  stopScan();
+  document.getElementById('item-qty').focus();
+  // Haptic feedback on mobile
+  if (navigator.vibrate) navigator.vibrate(60);
+  showToast('✅ Barcode scanned');
+}
+
+function stopScan() {
+  scanActive = false;
+  if (codeReader) {
+    try { codeReader.getTracks().forEach(t => t.stop()); } catch(e) {}
+    codeReader = null;
   }
+  const video = document.getElementById('preview');
+  video.srcObject = null;
   document.getElementById('video-container').classList.remove('active');
   document.getElementById('close-scan').style.display = 'none';
   document.getElementById('scan-btn').disabled = false;
