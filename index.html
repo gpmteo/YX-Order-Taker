@@ -179,7 +179,6 @@ main{flex:1;max-width:560px;width:100%;margin:0 auto;padding:14px 13px 100px;dis
 .prod-info{flex:1;min-width:0;}
 .prod-name{font-size:14px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .prod-code{font-family:"SF Mono","Fira Code",monospace;font-size:11px;color:var(--ink-soft);margin-top:2px;}
-.prod-form-row{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
 .section-label{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.07em;padding:4px 0 2px;}
 
 /* TOAST */
@@ -188,6 +187,48 @@ main{flex:1;max-width:560px;width:100%;margin:0 auto;padding:14px 13px 100px;dis
 
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+
+/* ── TABLET (768px+) ── */
+@media screen and (min-width:768px){
+  header{height:66px;padding:0 28px;}
+  .header-logo{height:36px;}
+  .header-title{font-size:13px;}
+  .header-title strong{font-size:16px;}
+  .tab{font-size:14px;padding:11px 8px 10px;}
+  main{padding:20px 24px 120px;gap:18px;}
+  .card-header{padding:16px 22px 14px;gap:12px;}
+  .card-icon{width:34px;height:34px;font-size:17px;}
+  .card-header h2{font-size:15px;}
+  .card-header p{font-size:12px;}
+  .card-body{padding:18px 22px;}
+  .fi{font-size:16px;padding:12px 15px;}
+  .fl{font-size:12px;}
+  .btn{font-size:15px;padding:12px 18px;}
+  .btn-sm{font-size:13px;padding:7px 13px;}
+  .order-item{padding:13px 22px;}
+  .item-name{font-size:15px;}
+  .item-sub{font-size:12px;}
+  .item-qty{font-size:14px;padding:4px 12px;}
+  .prod-item{padding:13px 22px;}
+  .prod-name{font-size:15px;}
+  .prod-code{font-size:12px;}
+  .order-header,.order-footer{padding:14px 22px;}
+  .total-bar{padding:14px 22px;}
+  .total-val{font-size:22px;}
+  .pin-pad{gap:12px;}
+  .pin-key{font-size:22px;padding:16px 10px;}
+  .lock-box{max-width:360px;padding:32px 28px;}
+  #video-container{max-height:320px;}
+  .lp-name{font-size:16px;}
+  .order-count{font-size:12px;}
+  .modal{max-width:600px;padding:24px 28px 36px;}
+}
+
+/* ── DESKTOP (1024px+) ── */
+@media screen and (min-width:1024px){
+  main{max-width:680px;}
+  .modal{max-width:680px;}
+}
 </style>
 </head>
 <body>
@@ -395,27 +436,6 @@ main{flex:1;max-width:560px;width:100%;margin:0 auto;padding:14px 13px 100px;dis
     </div>
   </div>
 
-  <!-- Change PIN -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-icon">🔑</div>
-      <div><h2>Admin PIN</h2><p>Change your 4-digit admin PIN</p></div>
-    </div>
-    <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
-      <div class="prod-form-row">
-        <div class="fg">
-          <label class="fl" for="new-pin">New PIN</label>
-          <input class="fi" id="new-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4 digits" style="letter-spacing:.2em;font-size:18px;text-align:center;">
-        </div>
-        <div class="fg">
-          <label class="fl" for="confirm-pin">Confirm PIN</label>
-          <input class="fi" id="confirm-pin" type="password" inputmode="numeric" maxlength="4" placeholder="Repeat" style="letter-spacing:.2em;font-size:18px;text-align:center;">
-        </div>
-      </div>
-      <button class="btn btn-primary btn-full" onclick="changePIN()">🔑 Update PIN</button>
-    </div>
-  </div>
-
 </main>
 </div>
 
@@ -498,8 +518,7 @@ const CONFIG = {
 };
 
 // ── CONSTANTS ──
-const PIN_KEY       = 'yx_admin_pin';
-const DEFAULT_PIN   = '2026';
+const ADMIN_PIN = '2026'; // Change this to update the admin PIN
 const CACHE_KEY     = 'yx_products_cache';
 const MAX_PIN_TRIES = 5;
 const LOCKOUT_MS    = 30000; // 30 seconds
@@ -594,9 +613,7 @@ function saveProducts() {
     }
   }
 }
-function getPin() {
-  return localStorage.getItem(PIN_KEY) || DEFAULT_PIN;
-}
+
 
 // ── ADMIN / LOCK ──
 function handleAdminBtn() {
@@ -634,7 +651,7 @@ function pinPress(d) {
   if (pinBuffer.length === 4) {
     setTimeout(() => {
       // Use length-safe comparison to avoid trivial timing leak
-      const stored = getPin();
+      const stored = ADMIN_PIN;
       const match  = pinBuffer.length === stored.length &&
                      pinBuffer.split('').every((c, i) => c === stored[i]);
       if (match) {
@@ -681,17 +698,6 @@ function syncNow() {
 function showSheetInfo() {
   const el = document.getElementById('sheet-id-display');
   if (el) el.textContent = CONFIG.SHEET_ID + ' / ' + CONFIG.SHEET_TAB;
-}
-
-function changePIN() {
-  const np = document.getElementById('new-pin').value.trim();
-  const cp = document.getElementById('confirm-pin').value.trim();
-  if (!/^\d{4}$/.test(np)) { showToast('⚠️ PIN must be exactly 4 digits'); return; }
-  if (np !== cp) { showToast('⚠️ PINs do not match'); return; }
-  localStorage.setItem(PIN_KEY, np);
-  document.getElementById('new-pin').value = '';
-  document.getElementById('confirm-pin').value = '';
-  showToast('✅ PIN updated');
 }
 
 // ── TABS ──
